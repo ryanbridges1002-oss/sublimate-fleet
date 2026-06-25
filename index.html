@@ -43,15 +43,16 @@ function zu(){return zu=Object.assign||function(g){for(var t=1;t<arguments.lengt
  * Agentic Fleet for Fundingo — capability demo (Sublimate)
  *
  * Tailored to Fundingo's world: Salesforce-native lending & loan
- * servicing. The Overseer is the SINGLE SOURCE OF TRUTH — every
- * request, worker proposal, and policy verdict converges on it; nothing
- * is authoritative until the Overseer holds it. Three propose-only
+ * servicing. The Overseer (the Arbiter) is the SINGLE SOURCE OF TRUTH —
+ * every request, worker proposal, and policy verdict converges on it;
+ * nothing is authoritative until the Overseer holds it. Three propose-only
  * workers do the doing: a Builder (code/config), a Loan-Servicing Ops
  * agent (servicing actions), and a Support & Answers agent (answers/explanations).
  * The Examiner / Q&A has ONE job: independently check the Overseer and
- * the workers for drift and hallucination — it only checks, never
- * routes or approves. A Fundingo approver owns every irreversible
- * deploy or message. Every edge carries a 'why'.
+ * the workers for drift and hallucination — it only checks, never routes
+ * or approves. Above the whole fleet sits Ryan, the human in the loop:
+ * he approves every input that enters and every output that ships — the
+ * Overseer coordinates but does not approve. Every edge carries a 'why'.
  *
  * Demo-safe: generic content only — no internal infrastructure names or
  * confidential terms.
@@ -68,11 +69,12 @@ window.GRAPH = {
     "Apex / LWC / Flow / report work, a Loan-Servicing Ops agent for statements, billing, " +
     "delinquency, and transfers, and a Support & Answers agent for requests that just need an answer or " +
     "explanation. Every proposal and policy verdict returns to the Overseer, which alone decides " +
-    "what ships. An independent Examiner / Q&A audits the Overseer and the workers for drift and " +
-    "hallucination; it only checks, it never routes or approves. A Fundingo approver owns every " +
-    "irreversible step — deploys and outbound messages — so speed never costs control in orgs full " +
-    "of borrower PII. The same approach already ships real production apps in a live lending org on " +
-    "the platform.",
+    "what to assemble. An independent Examiner / Q&A audits the Overseer and the workers for drift " +
+    "and hallucination; it only checks, it never routes or approves. Above the whole fleet sits " +
+    "Ryan, the human in the loop: he approves every input that enters and every output that ships — " +
+    "nothing comes in or goes out without his yes — and he sets the fleet's direction and can " +
+    "override any decision. The Overseer coordinates and assembles; it does not approve. The same " +
+    "approach already ships real production apps in a live lending org on the platform.",
 
   groups: [
     { id: "overseer", label: "Overseer · source of truth", color: "#2B5C8A" },
@@ -80,7 +82,7 @@ window.GRAPH = {
     { id: "worker",   label: "Workers (propose-only)",       color: "#4A7BA8" },
     { id: "bridge",   label: "I/O Bridge",                   color: "#5A6473" },
     { id: "external", label: "External I/O",                 color: "#3C5168" },
-    { id: "human",    label: "Human gate (Fundingo)",        color: "#C9A24B" }
+    { id: "human",    label: "Human in the loop",            color: "#C9A24B" }
   ],
 
   nodes: [
@@ -124,23 +126,23 @@ window.GRAPH = {
       label: "Intake Bridge",
       group: "bridge",
       title: "Ingress normalizer",
-      one_liner: "One front door: captures every lender, borrower, event, and build request, normalizes it into one internal format, and hands it to the Overseer.",
-      reads: ["lender / support / event / build channels"],
+      one_liner: "One front door: captures every lender, borrower, event, and build request, normalizes it into one internal format, and — once Ryan has approved it as work — hands it to the Overseer.",
+      reads: ["lender / support / event / build channels", "Ryan's input approval"],
       produces: ["normalized request", "source metadata"],
       skills_in: ["channel adapters", "triage", "dedupe"]
     },
 
-    /* ---------- Overseer (center) — the single source of truth ---------- */
+    /* ---------- Overseer (center) — single source of truth; coordinates, does NOT approve ---------- */
     {
       id: "overseer",
       label: "Overseer",
       group: "overseer",
       title: "Master coordinator · single source of truth",
-      one_liner: "The single source of truth. Every request, worker proposal, and policy verdict converges here; it triages the work, dispatches it to the right specialist, and assembles the result — and nothing is authoritative until the Overseer holds it. It ships nothing until the work is checked and, when irreversible, human-approved.",
+      one_liner: "The single source of truth (the Arbiter). Every request, worker proposal, and policy verdict converges here; it triages the work, dispatches it to the right specialist, and assembles the result — and nothing is authoritative until the Overseer holds it. It coordinates and assembles, but it does not approve: Ryan approves what enters and what ships.",
       reads: ["normalized request", "worker proposals", "policy verdicts", "Q&A audit notes"],
-      produces: ["assignment", "assembled result", "escalation to human"],
+      produces: ["assignment", "assembled result", "escalation to Ryan"],
       skills_in: ["triage + routing", "task decomposition", "prioritization"],
-      authority: "the canonical authority; cannot self-approve irreversible actions"
+      authority: "the canonical authority for coordination; does NOT approve — Ryan approves all inputs and outputs"
     },
 
     /* ---------- Examiner / Q&A (peer, right-and-below the Overseer) ---------- */
@@ -202,16 +204,16 @@ window.GRAPH = {
       authority: "propose-only (returns to the Overseer)"
     },
 
-    /* ---------- Human gate ---------- */
+    /* ---------- Human in the loop — above the whole fleet; approves all inputs + outputs ---------- */
     {
-      id: "human_gate",
-      label: "Fundingo Approver",
+      id: "ryan",
+      label: "Ryan",
       group: "human",
-      title: "Final authority",
-      one_liner: "The Fundingo person who reviews anything irreversible and lands the deploy or sends the message — nothing consequential leaves the fleet without their yes.",
-      reads: ["assembled result", "policy verdict", "Q&A verdict"],
-      produces: ["approval", "rejection", "direction"],
-      authority: "approve / land / deploy"
+      title: "The human in the loop — above the whole fleet",
+      one_liner: "The human in the loop, above the entire fleet. He approves every input that enters and every output that ships — nothing comes in or goes out without his yes — sets the fleet's direction, and can step in or override any decision. The Overseer coordinates under him; the approval authority is Ryan's, not the Arbiter's.",
+      reads: ["all inbound requests", "all outbound results", "fleet state", "Q&A audit"],
+      produces: ["input approval", "output approval", "direction", "override"],
+      authority: "human in the loop — approves ALL inputs and outputs; ultimate authority above the fleet"
     },
 
     /* ---------- I/O Bridge: output side ---------- */
@@ -220,8 +222,8 @@ window.GRAPH = {
       label: "Output Bridge",
       group: "bridge",
       title: "Egress dispatcher",
-      one_liner: "Takes an approved result and delivers it — applies the Salesforce change, sends the lender / borrower message or answer, closes the ticket — in each channel's native form.",
-      reads: ["approved result", "destination routing"],
+      one_liner: "Takes a Ryan-approved result and delivers it — applies the Salesforce change, sends the lender / borrower message or answer, closes the ticket — in each channel's native form.",
+      reads: ["assembled result", "Ryan's output approval", "destination routing"],
       produces: ["deploy", "message", "resolution"],
       skills_in: ["deploy", "delivery formatting", "receipts"]
     },
@@ -282,8 +284,8 @@ window.GRAPH = {
 
     /* ---- intake bridge -> overseer (everything converges on the source of truth) ---- */
     {
-      from: "io_input", to: "overseer", label: "normalized request", kind: "dispatch",
-      why: "Every request lands on the Overseer — the single source of truth — so there is one place that owns the canonical state of all work in flight and decides who handles it."
+      from: "io_input", to: "overseer", label: "approved request", kind: "dispatch",
+      why: "Every input Ryan has approved lands on the Overseer — the single source of truth — so there is one place that owns the canonical state of all work in flight and decides who handles it."
     },
 
     /* ---- overseer -> workers (triage to the right specialist) ---- */
@@ -307,29 +309,39 @@ window.GRAPH = {
     /* ---- workers -> overseer (all proposals return to the single source of truth) ---- */
     {
       from: "worker_builder", to: "overseer", label: "proposal", kind: "queue",
-      why: "Workers are propose-only and never authoritative: the Builder returns its draft to the Overseer, which alone decides what gets assembled and shipped."
+      why: "Workers are propose-only and never authoritative: the Builder returns its draft to the Overseer, which assembles what is ready for Ryan's approval."
     },
     {
       from: "worker_servicing", to: "overseer", label: "proposed action", kind: "queue",
-      why: "Servicing actions touch money and borrowers, so they come back to the Overseer for the decision rather than being applied by the worker."
+      why: "Servicing actions touch money and borrowers, so they come back to the Overseer to be assembled rather than being applied by the worker."
     },
     {
       from: "worker_responder", to: "overseer", label: "drafted answer", kind: "queue",
-      why: "Even a plain answer returns to the Overseer first — the single source of truth still decides what actually goes out to a borrower or lender."
+      why: "Even a plain answer returns to the Overseer first — the single source of truth assembles what will go out, and Ryan approves it before it does."
     },
     {
       from: "worker_policy", to: "overseer", label: "compliance verdict", kind: "queue",
-      why: "Even the policy verdict returns to the Overseer — the single source of truth owns the canonical call on what is allowed to ship."
+      why: "Even the policy verdict returns to the Overseer — the single source of truth owns the canonical view of what is allowed before Ryan approves the ship."
     },
 
-    /* ---- overseer -> human gate -> output ---- */
+    /* ---- Ryan sits ABOVE the whole fleet: approves EVERY input and EVERY output, and oversees the hub ---- */
     {
-      from: "overseer", to: "human_gate", label: "approve?", kind: "human",
-      why: "Holding the assembled, checked, policy-clean result, the Overseer escalates anything irreversible to a person — the fleet always requires an explicit human yes."
+      from: "ryan", to: "io_input", label: "approves inputs", kind: "human",
+      why: "Nothing enters the fleet without Ryan's yes — he approves every inbound request at the intake bridge before it becomes work the Overseer can act on."
     },
     {
-      from: "human_gate", to: "io_output", label: "approved", kind: "human",
-      why: "Only a human-approved result is allowed to leave the fleet, so the approval is the trigger that releases the work to the output bridge."
+      from: "ryan", to: "overseer", label: "oversight · direction", kind: "human",
+      why: "Ryan sits above the Overseer too: he sets the fleet's direction and can step in or override any decision the hub makes. The Overseer coordinates under him — it does not approve."
+    },
+    {
+      from: "ryan", to: "io_output", label: "approves outputs", kind: "human",
+      why: "Nothing leaves the fleet without Ryan's yes — he approves every outbound result at the output bridge before it ships to the org or to a person."
+    },
+
+    /* ---- overseer hands the assembled result to the output bridge (Ryan approves it there) ---- */
+    {
+      from: "overseer", to: "io_output", label: "assembled result", kind: "queue",
+      why: "The Overseer assembles the checked, policy-clean result and hands it to the Output Bridge — but it is Ryan's approval at that bridge, not the Overseer's, that releases it."
     },
 
     /* ---- output bridge -> external outputs ---- */
@@ -371,16 +383,19 @@ window.GRAPH = {
 
   legend: [
     "Read left to right: lender / borrower / event / build requests arrive, the Intake Bridge normalizes them, and everything converges on the Overseer.",
-    "The Overseer is the single source of truth — it triages each request to the right worker, every proposal returns to it, and it alone decides what ships.",
+    "The Overseer (the Arbiter) is the single source of truth — it triages each request to the right worker, every proposal returns to it, and it alone decides what to assemble. It coordinates and assembles; it does not approve.",
     "Three propose-only workers: a Builder (builds code/config), Loan-Servicing Ops (takes servicing actions), and a Support & Answers agent (answers requests that just need an explanation).",
-    "The Examiner / Q&A only checks: it audits the Overseer and every worker for drift and hallucination and never routes, owns, or approves work. The amber node is the Fundingo human, who must approve anything irreversible.",
+    "The Examiner / Q&A only checks: it audits the Overseer and every worker for drift and hallucination and never routes, owns, or approves work. The amber star at the top is Ryan, the human in the loop — he sits above the whole fleet and approves every input that enters and every output that ships; nothing moves in or out without his yes.",
     "Hover any line to see its 'why' — every connection states the reason it exists, not just what it links."
   ]
 };
 
 /* ---------------------------------------------------------------------
  * LAYOUT — fixed left->right spine (hundreds-of-px scale).
- * The Overseer's workers fan out below it; the Examiner audits from the right.
+ * The Overseer's workers fan out below it; the Examiner audits from the right;
+ * Ryan (the human in the loop) sits at top-center, above the whole fleet, and
+ * reaches down to BOTH bridges (he approves every input and every output) and
+ * to the Overseer (oversight).
  * ------------------------------------------------------------------- */
 window.LAYOUT = {
   /* far-left inputs, stacked (4) */
@@ -395,6 +410,9 @@ window.LAYOUT = {
   /* center hub — the source of truth */
   overseer:         { x:    0, y:    0 },
 
+  /* human in the loop: top-center, above the whole fleet */
+  ryan:             { x:    0, y: -340 },
+
   /* examiner: peer to the right-and-below, auditing back onto the agents */
   examiner:         { x:  360, y:  120 },
 
@@ -403,9 +421,6 @@ window.LAYOUT = {
   worker_servicing: { x: -110, y:  370 },
   worker_responder: { x:   90, y:  250 },
   worker_policy:    { x:  120, y:  440 },
-
-  /* human gate: above the output path */
-  human_gate:       { x:  560, y: -220 },
 
   /* output bridge */
   io_output:        { x:  560, y:    0 },
@@ -521,6 +536,26 @@ window.THEME = {
   .tip-sec.in .tip-h { color: #7ee787; } .tip-sec.out .tip-h { color: #ffa657; } .tip-sec.rd .tip-h { color: #79c0ff; }
   .tip-li { display: block; font-size: 11.5px; line-height: 1.4; color: #c2ccd6; padding-left: 10px; position: relative; }
   .tip-li::before { content: '·'; position: absolute; left: 2px; color: #6b7785; }
+  /* ===== Mobile / narrow-screen layout ===== */
+  @media (max-width: 760px) {
+    header { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; grid-column: 1 / -1; }
+    header .spacer { display: none; }
+    header h1 { order: 1; flex-basis: 100%; font-size: 14px; }
+    header .sub { order: 2; font-size: 11px; }
+    #sidebarToggle { order: 3; margin-left: auto; }
+    #search { order: 4; flex-basis: 100%; width: 100%; }
+    /* Map fills the whole screen; the info panel becomes a bottom-sheet overlay instead of a
+       squished side column. Toggle it with the existing "Show / Hide panel" button. */
+    #app, #app.sidebar-collapsed { grid-template-columns: 1fr; }
+    aside {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+      width: 100%; max-height: 68vh;
+      border-left: none; border-top: 1px solid var(--border);
+      box-shadow: 0 -12px 32px #000b; z-index: 30;
+    }
+    .zones { padding: 0 12px; }
+    .zones span { font-size: 9.5px; letter-spacing: 1px; }
+  }
 </style>
 </head>
 <body>
@@ -783,6 +818,15 @@ document.querySelectorAll('aside .card > h2').forEach(h => {
   });
 })();
 
+// On small screens, start with the info panel collapsed so the map opens full-width.
+(function () {
+  if (!window.matchMedia || !window.matchMedia('(max-width: 760px)').matches) return;
+  const app = document.getElementById('app');
+  const btn = document.getElementById('sidebarToggle');
+  app.classList.add('sidebar-collapsed');
+  if (btn) { btn.textContent = '⟨ Show panel'; btn.setAttribute('aria-expanded', 'false'); }
+})();
+
 // Collapsible hubs: double-click a hub to hide/show its downstream branch.
 const collapsedSet = new Set();
 function collapsedHidden() {
@@ -839,7 +883,27 @@ function ioBlock(cls, title, arr) {
   return `<div class="io ${cls}"><h3>${title}</h3>${body}</div>`;
 }
 
-network.on('click', p => { if (p.nodes.length) { highlight(p.nodes[0]); showDetail(p.nodes[0]); } else { clearHi(); showDetail(null); } });
+// Click a node to focus it; click the SAME focused node again (or empty canvas) to reset to the full map.
+let selectedId = null;
+function resetSelection() {
+  selectedId = null;
+  const s = document.getElementById('search'); if (s) s.value = '';
+  clearHi(); showDetail(null);
+}
+function focusNode(id) {
+  selectedId = id;
+  const s = document.getElementById('search'); if (s) s.value = '';
+  highlight(id); showDetail(id);
+}
+network.on('click', p => {
+  if (p.nodes.length) {
+    const id = p.nodes[0];
+    if (id === selectedId) resetSelection();   // re-click the focused node → reset to full map
+    else focusNode(id);
+  } else {
+    resetSelection();                          // click empty canvas → reset
+  }
+});
 network.on('doubleClick', p => {
   // Double-click a hub to collapse/expand its branch; otherwise zoom.
   if (p.nodes.length && !toggleCollapse(p.nodes[0])) network.focus(p.nodes[0], { scale: 1.1, animation: true });
