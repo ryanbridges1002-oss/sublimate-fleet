@@ -52,7 +52,13 @@ function zu(){return zu=Object.assign||function(g){for(var t=1;t<arguments.lengt
  * the workers for drift and hallucination — it only checks, never routes
  * or approves. Above the whole fleet sits Ryan, the human in the loop:
  * he approves every input that enters and every output that ships — the
- * Overseer coordinates but does not approve. Every edge carries a 'why'.
+ * Overseer coordinates but does not approve. NEW (project loop): Ryan can
+ * also queue whole PROJECT ROADMAPS; the Overseer then runs the delivery
+ * loop itself — compose one self-contained phase assignment, review the
+ * returned evidence refute-first, save the internal checkpoint, repeat —
+ * and on completion notifies Ryan with the evidence and starts the next
+ * queued project unattended. Approval sits at the project's boundaries.
+ * Every edge carries a 'why'.
  *
  * Demo-safe: generic content only — no internal infrastructure names or
  * confidential terms.
@@ -73,8 +79,16 @@ window.GRAPH = {
     "and hallucination; it only checks, it never routes or approves. Above the whole fleet sits " +
     "Ryan, the human in the loop: he approves every input that enters and every output that ships — " +
     "nothing comes in or goes out without his yes — and he sets the fleet's direction and can " +
-    "override any decision. The Overseer coordinates and assembles; it does not approve. The same " +
-    "approach already ships real production apps in a live lending org on the platform.",
+    "override any decision. The Overseer coordinates and assembles; it does not approve. That " +
+    "human-approved approach already ships real production apps in a live lending org on the " +
+    "platform. The fleet also runs whole projects unattended: Ryan queues an approved, phased " +
+    "roadmap and the Overseer works it phase by phase — composing one self-contained assignment " +
+    "at a time, demanding evidence with every result, reviewing it refute-first, and saving each " +
+    "internal checkpoint only when the proof holds — then notifies Ryan with the evidence and " +
+    "starts the next queued project on its own. Approval moves to the project's boundaries: Ryan " +
+    "approves the roadmap going in and reviews the delivered result coming out, and anything that " +
+    "leaves the fleet — a deploy, a message — still waits for his yes. Two consecutive failures " +
+    "halt the loop and summon Ryan; an idle queue costs zero model calls.",
 
   groups: [
     { id: "overseer", label: "Overseer · source of truth", color: "#2B5C8A" },
@@ -119,6 +133,14 @@ window.GRAPH = {
       one_liner: "New feature, report, and LWC asks plus bug reports for the Salesforce org.",
       produces: ["build request", "bug report"]
     },
+    {
+      id: "in_projects",
+      label: "Project roadmap queue",
+      group: "external",
+      title: "Queued whole projects",
+      one_liner: "Whole builds, queued: Ryan-approved roadmaps broken into phases. The fleet works the queue in order — one project at a time, phase by phase, unattended — and moves to the next entry on its own when one finishes.",
+      produces: ["phased roadmap", "queue order"]
+    },
 
     /* ---------- I/O Bridge: input side ---------- */
     {
@@ -127,7 +149,7 @@ window.GRAPH = {
       group: "bridge",
       title: "Ingress normalizer",
       one_liner: "One front door: captures every lender, borrower, event, and build request, normalizes it into one internal format, and — once Ryan has approved it as work — hands it to the Overseer.",
-      reads: ["lender / support / event / build channels", "Ryan's input approval"],
+      reads: ["lender / support / event / build channels", "project roadmap queue", "Ryan's input approval"],
       produces: ["normalized request", "source metadata"],
       skills_in: ["channel adapters", "triage", "dedupe"]
     },
@@ -138,11 +160,12 @@ window.GRAPH = {
       label: "Overseer",
       group: "overseer",
       title: "Master coordinator · single source of truth",
-      one_liner: "The single source of truth (the Arbiter). Every request, worker proposal, and policy verdict converges here; it triages the work, dispatches it to the right specialist, and assembles the result — and nothing is authoritative until the Overseer holds it. It coordinates and assembles, but it does not approve: Ryan approves what enters and what ships.",
-      reads: ["normalized request", "worker proposals", "policy verdicts", "Q&A audit notes"],
-      produces: ["assignment", "assembled result", "escalation to Ryan"],
-      skills_in: ["triage + routing", "task decomposition", "prioritization"],
-      authority: "the canonical authority for coordination; does NOT approve — Ryan approves all inputs and outputs"
+      one_liner: "The single source of truth (the Arbiter). Every request, worker proposal, and policy verdict converges here; it triages the work, dispatches it to the right specialist, and assembles the result — and nothing is authoritative until the Overseer holds it. Given a queued project roadmap it also runs the delivery loop itself: one self-contained phase assignment at a time, evidence reviewed refute-first, each internal checkpoint saved only when the proof holds, then on to the next phase — and the next project — unattended. It coordinates and assembles, but it does not approve: Ryan approves what enters and what ships beyond the fleet.",
+      reads: ["normalized request", "queued project roadmaps", "worker proposals", "policy verdicts", "Q&A audit notes"],
+      produces: ["assignment", "phase assignment", "checkpoint release", "assembled result", "completion notice", "escalation to Ryan"],
+      skills_in: ["triage + routing", "task decomposition", "phase sequencing", "evidence review (refute, don't confirm)", "prioritization"],
+      schedule: "always-on delivery loop — an empty queue costs zero model calls",
+      authority: "the canonical authority for coordination; does NOT approve — Ryan approves all inputs and outputs. The project loop runs under hard guardrails: two consecutive failures halt it and summon Ryan, and a kill switch pauses it at any time"
     },
 
     /* ---------- Examiner / Q&A (peer, right-and-below the Overseer) ---------- */
@@ -281,6 +304,10 @@ window.GRAPH = {
       from: "in_build", to: "io_input", label: "build / bug", kind: "queue",
       why: "Feature and bug requests for the org join the same queue, so delivery work is coordinated alongside servicing instead of in a side channel."
     },
+    {
+      from: "in_projects", to: "io_input", label: "queued roadmap", kind: "queue",
+      why: "Whole projects enter through the same approved front door as single requests: Ryan queues a phased roadmap once, and the fleet turns it into finished, checkpointed work without further prompting — the queue's order is the schedule."
+    },
 
     /* ---- intake bridge -> overseer (everything converges on the source of truth) ---- */
     {
@@ -341,7 +368,7 @@ window.GRAPH = {
     /* ---- overseer hands the assembled result to the output bridge (Ryan approves it there) ---- */
     {
       from: "overseer", to: "io_output", label: "assembled result", kind: "queue",
-      why: "The Overseer assembles the checked, policy-clean result and hands it to the Output Bridge — but it is Ryan's approval at that bridge, not the Overseer's, that releases it."
+      why: "The Overseer assembles the checked, policy-clean result and hands it to the Output Bridge — but it is Ryan's approval at that bridge, not the Overseer's, that releases it. Project-loop phases work differently by design: Ryan pre-approves the roadmap at intake, each accepted phase is saved internally with its evidence, and Ryan reviews that evidence at project completion — so the middle runs unattended, while anything that actually leaves the fleet still crosses this bridge for his yes."
     },
 
     /* ---- output bridge -> external outputs ---- */
@@ -386,6 +413,7 @@ window.GRAPH = {
     "The Overseer (the Arbiter) is the single source of truth — it triages each request to the right worker, every proposal returns to it, and it alone decides what to assemble. It coordinates and assembles; it does not approve.",
     "Three propose-only workers: a Builder (builds code/config), Loan-Servicing Ops (takes servicing actions), and a Support & Answers agent (answers requests that just need an explanation).",
     "The Examiner / Q&A only checks: it audits the Overseer and every worker for drift and hallucination and never routes, owns, or approves work. The amber star at the top is Ryan, the human in the loop — he sits above the whole fleet and approves every input that enters and every output that ships; nothing moves in or out without his yes.",
+    "Project loop: Ryan queues an approved roadmap and the Overseer delivers it phase by phase — one self-contained assignment at a time, evidence reviewed refute-first, each internal checkpoint saved only when the proof holds — then starts the next queued project itself. Ryan approves the roadmap going in and reviews the evidence at completion; anything that leaves the fleet still needs his yes. Two consecutive failures halt the loop and summon Ryan; an idle queue costs zero model calls.",
     "Hover any line to see its 'why' — every connection states the reason it exists, not just what it links."
   ]
 };
@@ -398,11 +426,12 @@ window.GRAPH = {
  * to the Overseer (oversight).
  * ------------------------------------------------------------------- */
 window.LAYOUT = {
-  /* far-left inputs, stacked (4) */
-  in_lender:        { x: -900, y: -260 },
-  in_support:       { x: -900, y:  -90 },
-  in_events:        { x: -900, y:   90 },
-  in_build:         { x: -900, y:  260 },
+  /* far-left inputs, stacked (5) */
+  in_projects:      { x: -900, y: -300 },
+  in_lender:        { x: -900, y: -150 },
+  in_support:       { x: -900, y:    0 },
+  in_events:        { x: -900, y:  150 },
+  in_build:         { x: -900, y:  300 },
 
   /* intake bridge */
   io_input:         { x: -520, y:    0 },
@@ -436,7 +465,7 @@ window.LAYOUT = {
  * CHILDREN — collapsible hubs map to their child node ids.
  * ------------------------------------------------------------------- */
 window.CHILDREN = {
-  io_input:  ["in_lender", "in_support", "in_events", "in_build"],
+  io_input:  ["in_projects", "in_lender", "in_support", "in_events", "in_build"],
   overseer:  ["worker_builder", "worker_servicing", "worker_responder", "worker_policy", "examiner"],
   io_output: ["out_deploy", "out_message", "out_ticket", "out_future"]
 };
